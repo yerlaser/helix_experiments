@@ -31,6 +31,7 @@
 | common-lisp | ✓ |  | ✓ | `cl-lsp` |
 | cpon | ✓ |  | ✓ |  |
 | cpp | ✓ | ✓ | ✓ | `clangd` |
+| crystal | ✓ | ✓ |  | `crystalline` |
 | crystal | ✓ | ✓ | ✓ | `crystalline`, `ameba-ls` |
 | css | ✓ |  | ✓ | `vscode-css-language-server` |
 | csv | ✓ |  |  |  |

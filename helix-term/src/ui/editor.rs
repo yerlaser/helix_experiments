@@ -127,6 +127,18 @@ impl EditorView {
             &text_annotations,
         ));
 
+        if doc
+            .language_config()
+            .and_then(|config| config.rainbow_brackets)
+            .unwrap_or(config.rainbow_brackets)
+        {
+            if let Some(overlay) =
+                Self::doc_rainbow_highlights(doc, view_offset.anchor, inner.height, theme, &loader)
+            {
+                overlays.push(overlay);
+            }
+        }
+
         Self::doc_diagnostics_highlights_into(doc, theme, &mut overlays);
 
         if is_focused {
@@ -222,7 +234,7 @@ impl EditorView {
         let mut context =
             statusline::RenderContext::new(editor, doc, view, is_focused, &self.spinners);
 
-        statusline::render(&mut context, statusline_area, surface);
+        statusline::render(&mut context, statusline_area, surface)
     }
 
     pub fn render_rulers(
@@ -302,6 +314,27 @@ impl EditorView {
         range = text.byte_to_char(range.start)..text.byte_to_char(range.end);
 
         text_annotations.collect_overlay_highlights(range)
+    }
+
+    pub fn doc_rainbow_highlights(
+        doc: &Document,
+        anchor: usize,
+        height: u16,
+        theme: &Theme,
+        loader: &syntax::Loader,
+    ) -> Option<OverlayHighlights> {
+        let syntax = doc.syntax()?;
+        let text = doc.text().slice(..);
+        let row = text.char_to_line(anchor.min(text.len_chars()));
+        let visible_range = Self::viewport_byte_range(text, row, height);
+        let start = syntax::child_for_byte_range(
+            &syntax.tree().root_node(),
+            visible_range.start as u32..visible_range.end as u32,
+        )
+        .map_or(visible_range.start as u32, |node| node.start_byte());
+        let range = start..visible_range.end as u32;
+
+        Some(syntax.rainbow_highlights(text, theme.rainbow_length(), loader, range))
     }
 
     /// Get highlight spans for document diagnostics
@@ -1501,8 +1534,15 @@ impl Component for EditorView {
             _ => false,
         };
 
-        // -1 for commandline and -1 for bufferline
-        let mut editor_area = area.clip_bottom(1);
+        // If merge_with_commandline option is set, then status message renders on top of the statusline, in which case we will not show the statusline
+        // Otherwise, status message renders in a separate line, so we give it 1 line of vertical space
+        let mut editor_area = area.clip_bottom(if config.statusline.merge_with_commandline {
+            0
+        } else {
+            1
+        });
+
+        // Editor area decreases by 1, to give 1 line of vertical space for bufferline
         if use_bufferline {
             editor_area = editor_area.clip_top(1);
         }
@@ -1564,9 +1604,15 @@ impl Component for EditorView {
             } else {
                 0
             };
+            let y_offset = if config.statusline.merge_with_commandline {
+                // render macros and key sequences 1 line above
+                1
+            } else {
+                0
+            };
             surface.set_string(
                 area.x + area.width.saturating_sub(key_width + macro_width),
-                area.y + area.height.saturating_sub(1),
+                (area.y + area.height.saturating_sub(1)).saturating_sub(y_offset),
                 disp.get(disp.len().saturating_sub(key_width as usize)..)
                     .unwrap_or(&disp),
                 style,
@@ -1578,7 +1624,7 @@ impl Component for EditorView {
                     .add_modifier(Modifier::BOLD);
                 surface.set_string(
                     area.x + area.width.saturating_sub(3),
-                    area.y + area.height.saturating_sub(1),
+                    (area.y + area.height.saturating_sub(1)).saturating_sub(y_offset),
                     &disp,
                     style,
                 );

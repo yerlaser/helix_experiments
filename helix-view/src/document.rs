@@ -836,7 +836,7 @@ impl Document {
 
             let args = match fmt_args
                 .iter()
-                .map(|content| expansion::expand(editor, Token::expand(content)))
+                .map(|content| expansion::expand(editor, Token::expand(content), &[]))
                 .collect::<Result<Vec<_>, _>>()
             {
                 Ok(args) => args,
@@ -1807,6 +1807,12 @@ impl Document {
     /// Current document version, incremented at each change.
     pub fn version(&self) -> i32 {
         self.version
+    }
+
+    pub fn word_completion_enabled(&self) -> bool {
+        self.language_config()
+            .and_then(|lang_config| lang_config.word_completion.and_then(|c| c.enable))
+            .unwrap_or_else(|| self.config.load().word_completion.enable)
     }
 
     pub fn path_completion_enabled(&self) -> bool {
